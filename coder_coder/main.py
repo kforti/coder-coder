@@ -1,19 +1,38 @@
 import json
-import math
 import os
-import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 import typer
 
 import openai
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / "env" /".env")
-openai.api_key = os.environ["OPENAI_API_KEY"]  # supply your API key however you choose
-openai.organization = os.environ["OPENAI_ORG_ID"]  # supply your organization key however you choose
+coder_env = Path.home() / ".coder_code"
+if not coder_env.exists():
+    coder_env.mkdir()
 
+
+def load_config():
+    config_file = coder_env / "config.json"
+    if config_file.exists():
+        with open(config_file, "r") as f:
+            config = json.load(f)
+    else:
+        config = {"text_model": "gpt-4"}
+    for k, v in config.items():
+        os.environ[k] = v
+    return config
+
+def save_config(config):
+    config_file = coder_env / "config.json"
+    with open(config_file, "w") as f:
+        json.dump(config, f)
+
+
+CONFIG = load_config()
+openai.api_key = os.environ["OPENAI_API_KEY"]
+openai.organization = os.environ["OPENAI_ORG_ID"]
 
 app = typer.Typer()
 
@@ -41,7 +60,7 @@ def code(user_prompt: str = typer.Argument(...),
          Output code only. No description."""
     else:
         prompt = f"Write code to {user_prompt}. Output the code only. No description."
-    completion = openai.ChatCompletion.create(model="gpt-4", messages=[{"role": "user", "content": prompt}])
+    completion = openai.ChatCompletion.create(model=CONFIG["text_model"], messages=[{"role": "user", "content": prompt}])
     text_response = completion.choices[0].message.content
     typer.echo(text_response)
     if out_file:
@@ -50,12 +69,22 @@ def code(user_prompt: str = typer.Argument(...),
 
 
 @app.command()
+def document(in_file: Optional[str] = typer.Argument(...)):
+    typer.echo(f"Documenting: {in_file}")
+    prompt = f"""Write documentation for the following code: {in_file}"""
+    completion = openai.ChatCompletion.create(model=CONFIG["text_model"], messages=[{"role": "user", "content": prompt}])
+    text_response = completion.choices[0].message.content
+    typer.echo(text_response)
+
+
+@app.command()
 def plan(user_prompt: str = typer.Argument(...),
          out_file: Optional[str] = typer.Option(None)):
+    typer.echo(f"Planning: {user_prompt}")
     prompt = f"""
 Develop a plan for the following goal: {user_prompt}
 """
-    completion = openai.ChatCompletion.create(model="gpt-4", messages=[{"role": "user", "content": prompt}])
+    completion = openai.ChatCompletion.create(model=CONFIG["text_model"], messages=[{"role": "user", "content": prompt}])
     text_response = completion.choices[0].message.content
     typer.echo(text_response)
     if out_file:
@@ -66,9 +95,25 @@ Develop a plan for the following goal: {user_prompt}
 @app.command()
 def prompt(user_prompt: str = typer.Argument(...),
          out_file: Optional[str] = typer.Option(None)):
-    completion = openai.ChatCompletion.create(model="gpt-4", messages=[{"role": "user", "content": user_prompt}])
+    typer.echo(f"Prompting: {user_prompt}")
+    completion = openai.ChatCompletion.create(model=CONFIG["text_model"], messages=[{"role": "user", "content": user_prompt}])
     text_response = completion.choices[0].message.content
     typer.echo(text_response)
     if out_file:
         with open(out_file, "w") as f:
             f.write(text_response)
+
+
+@app.command()
+def set_config(key: str = typer.Argument(...),
+               value: str = typer.Argument(...)):
+    CONFIG[key] = value
+    save_config(CONFIG)
+
+
+@app.command()
+def get_config(key: str = typer.Option(default=None)):
+    if key is not None:
+        typer.echo(CONFIG[key])
+    else:
+        typer.echo(CONFIG)
