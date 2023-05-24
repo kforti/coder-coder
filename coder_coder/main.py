@@ -1,12 +1,11 @@
 import json
-import os
 from pathlib import Path
-from typing import Optional, Any
+from textwrap import dedent
+from typing import Optional
 
 import typer
 
 import openai
-from dotenv import load_dotenv
 
 coder_env = Path.home() / ".coder_code"
 if not coder_env.exists():
@@ -20,8 +19,6 @@ def load_config():
             config = json.load(f)
     else:
         config = {"text_model": "gpt-4"}
-    for k, v in config.items():
-        os.environ[k] = v
     return config
 
 def save_config(config):
@@ -31,8 +28,8 @@ def save_config(config):
 
 
 CONFIG = load_config()
-openai.api_key = os.environ["OPENAI_API_KEY"]
-openai.organization = os.environ["OPENAI_ORG_ID"]
+openai.api_key = CONFIG.get("OPENAI_API_KEY")
+openai.organization = CONFIG.get("OPENAI_ORG_ID")
 
 app = typer.Typer()
 
@@ -40,7 +37,7 @@ app = typer.Typer()
 @app.callback()
 def callback():
     """
-    Awesome Portal Gun
+    Coder Coder
     """
 
 
@@ -81,9 +78,9 @@ def document(in_file: Optional[str] = typer.Argument(...)):
 def plan(user_prompt: str = typer.Argument(...),
          out_file: Optional[str] = typer.Option(None)):
     typer.echo(f"Planning: {user_prompt}")
-    prompt = f"""
-Develop a plan for the following goal: {user_prompt}
-"""
+    prompt = dedent(f"""
+    Develop a plan for the following goal: {user_prompt}
+    """)
     completion = openai.ChatCompletion.create(model=CONFIG["text_model"], messages=[{"role": "user", "content": prompt}])
     text_response = completion.choices[0].message.content
     typer.echo(text_response)
